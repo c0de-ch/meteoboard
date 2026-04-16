@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f3460">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>MeteoBoard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>MeteoBoard</h1>
+      <div id="connection-status" class="status-dot" title="Disconnected"></div>
+    </div>
+    <div class="header-right">
+      <span id="last-update"></span>
+      <div id="device-status">
+        <span id="battery-indicator" title="Battery"></span>
+        <span id="rssi-indicator" title="Signal strength"></span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Current readings -->
+    <section id="current-readings" class="widget-grid"></section>
+
+    <!-- Wind compass -->
+    <section id="wind-section">
+      <div class="wind-container">
+        <div id="wind-compass">
+          <svg viewBox="0 0 200 200" id="compass-svg">
+            <!-- Compass ring -->
+            <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+            <circle cx="100" cy="100" r="70" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <!-- Cardinal labels -->
+            <text x="100" y="22" class="compass-label cardinal">N</text>
+            <text x="178" y="105" class="compass-label cardinal">E</text>
+            <text x="100" y="192" class="compass-label cardinal">S</text>
+            <text x="22" y="105" class="compass-label cardinal">W</text>
+            <!-- Intercardinal labels -->
+            <text x="153" y="50" class="compass-label">NE</text>
+            <text x="153" y="162" class="compass-label">SE</text>
+            <text x="40" y="162" class="compass-label">SW</text>
+            <text x="40" y="50" class="compass-label">NW</text>
+            <!-- Tick marks -->
+            <line x1="100" y1="12" x2="100" y2="20" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+            <line x1="188" y1="100" x2="180" y2="100" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+            <line x1="100" y1="188" x2="100" y2="180" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+            <line x1="12" y1="100" x2="20" y2="100" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+            <!-- Arrow (rotates) -->
+            <g id="wind-arrow" transform="rotate(0, 100, 100)">
+              <polygon points="100,25 110,100 100,90 90,100" fill="#e94560" opacity="0.9"/>
+              <polygon points="100,175 110,100 100,110 90,100" fill="rgba(233,69,96,0.3)"/>
+            </g>
+            <!-- Center dot -->
+            <circle cx="100" cy="100" r="4" fill="#e94560"/>
+          </svg>
+        </div>
+        <div class="wind-info">
+          <div class="wind-detail">
+            <span class="wind-label">Speed</span>
+            <span id="wind-speed-display" class="wind-value">--</span>
+            <span class="wind-unit">m/s</span>
+          </div>
+          <div class="wind-detail">
+            <span class="wind-label">Gust</span>
+            <span id="wind-gust-display" class="wind-value">--</span>
+            <span class="wind-unit">m/s</span>
+          </div>
+          <div class="wind-detail">
+            <span class="wind-label">Direction</span>
+            <span id="wind-dir-display" class="wind-value">--</span>
+            <span class="wind-unit">&deg;</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Historical charts -->
+    <section id="charts-section">
+      <div class="time-range-selector">
+        <button data-range="1h">1H</button>
+        <button data-range="6h">6H</button>
+        <button data-range="24h" class="active">24H</button>
+        <button data-range="7d">7D</button>
+        <button data-range="30d">30D</button>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-container">
+          <h3>Temperature &amp; Dew Point</h3>
+          <div class="chart-wrapper"><canvas id="chart-temperature"></canvas></div>
+        </div>
+        <div class="chart-container">
+          <h3>Humidity &amp; Pressure</h3>
+          <div class="chart-wrapper"><canvas id="chart-humidity-pressure"></canvas></div>
+        </div>
+        <div class="chart-container">
+          <h3>Wind Speed &amp; Gust</h3>
+          <div class="chart-wrapper"><canvas id="chart-wind"></canvas></div>
+        </div>
+        <div class="chart-container">
+          <h3>Precipitation</h3>
+          <div class="chart-wrapper"><canvas id="chart-rain"></canvas></div>
+        </div>
+        <div class="chart-container">
+          <h3>Light &amp; UV</h3>
+          <div class="chart-wrapper"><canvas id="chart-light-uv"></canvas></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>MeteoBoard &mdash; Shelly WS90 Weather Dashboard</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="/js/wind-rose.js"></script>
+  <script src="/js/widgets.js"></script>
+  <script src="/js/charts.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

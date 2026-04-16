@@ -1,0 +1,22 @@
+{
+  "name": "meteoboard",
+  "version": "1.0.0",
+  "description": "Weather dashboard for Shelly WS90 (SBWS-90CM) via BLU Gateway Gen3",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "setup": "node scripts/setup-wizard.js",
+    "discover": "node scripts/discover-sensors.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "mqtt": "^5.10.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
