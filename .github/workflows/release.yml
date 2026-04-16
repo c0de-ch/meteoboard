@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install production dependencies
+        run: npm ci --production
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release package
+        run: |
+          RELEASE_DIR="meteoboard-${{ steps.version.outputs.VERSION }}"
+          mkdir -p "${RELEASE_DIR}"
+
+          # Copy application files
+          cp -r src/ "${RELEASE_DIR}/src/"
+          cp -r public/ "${RELEASE_DIR}/public/"
+          cp -r scripts/ "${RELEASE_DIR}/scripts/"
+          cp package.json package-lock.json "${RELEASE_DIR}/"
+          cp .env.example "${RELEASE_DIR}/"
+          cp .gitignore "${RELEASE_DIR}/"
+          cp README.md "${RELEASE_DIR}/"
+          cp install.sh "${RELEASE_DIR}/"
+          chmod +x "${RELEASE_DIR}/install.sh"
+          chmod +x "${RELEASE_DIR}/scripts/"*.js
+
+          # Include node_modules so install works offline (no build tools needed)
+          cp -r node_modules/ "${RELEASE_DIR}/node_modules/"
+
+          # Create tarball
+          tar -czf "meteoboard-${{ steps.version.outputs.VERSION }}.tar.gz" "${RELEASE_DIR}/"
+
+          # Create lightweight tarball (without node_modules, user runs npm install)
+          rm -rf "${RELEASE_DIR}/node_modules"
+          tar -czf "meteoboard-${{ steps.version.outputs.VERSION }}-slim.tar.gz" "${RELEASE_DIR}/"
+
+      - name: Generate changelog from commits
+        id: changelog
+        run: |
+          # Get commits since last tag (or all commits if first release)
+          PREV_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 || true)
+          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "${GITHUB_REF_NAME}" ]; then
+            CHANGES=$(git log --pretty=format:"- %s" "${PREV_TAG}..HEAD" --no-merges)
+          else
+            CHANGES=$(git log --pretty=format:"- %s" --no-merges)
+          fi
+          # Write to file to handle multiline
+          echo "$CHANGES" > /tmp/changelog.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MeteoBoard v${{ steps.version.outputs.VERSION }}
+          body: |
+            ## MeteoBoard v${{ steps.version.outputs.VERSION }}
+
+            ### Installation
+
+            **Quick install (on your LXC container):**
+            ```bash
+            wget https://github.com/c0de-ch/meteoboard/releases/download/${{ github.ref_name }}/meteoboard-${{ steps.version.outputs.VERSION }}.tar.gz
+            tar -xzf meteoboard-${{ steps.version.outputs.VERSION }}.tar.gz
+            cd meteoboard-${{ steps.version.outputs.VERSION }}
+            sudo bash install.sh
+            ```
+
+            **Slim package** (smaller download, requires `npm install` on target):
+            ```bash
+            wget https://github.com/c0de-ch/meteoboard/releases/download/${{ github.ref_name }}/meteoboard-${{ steps.version.outputs.VERSION }}-slim.tar.gz
+            tar -xzf meteoboard-${{ steps.version.outputs.VERSION }}-slim.tar.gz
+            cd meteoboard-${{ steps.version.outputs.VERSION }}
+            sudo bash install.sh
+            ```
+
+            ### Changes
+            ${{ steps.changelog.outputs.CHANGES }}
+
+            See [README](https://github.com/c0de-ch/meteoboard#readme) for full documentation.
+          files: |
+            meteoboard-${{ steps.version.outputs.VERSION }}.tar.gz
+            meteoboard-${{ steps.version.outputs.VERSION }}-slim.tar.gz
+          draft: false
+          prerelease: false

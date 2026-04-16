@@ -130,6 +130,7 @@ install_app() {
 
   # Copy application files
   cp -r "${SCRIPT_DIR}/package.json" "${APP_DIR}/"
+  cp -r "${SCRIPT_DIR}/package-lock.json" "${APP_DIR}/" 2>/dev/null || true
   cp -r "${SCRIPT_DIR}/src" "${APP_DIR}/"
   cp -r "${SCRIPT_DIR}/public" "${APP_DIR}/"
   cp -r "${SCRIPT_DIR}/scripts" "${APP_DIR}/"
@@ -139,16 +140,26 @@ install_app() {
     cp "${SCRIPT_DIR}/.env.example" "${APP_DIR}/.env.example"
   fi
 
+  # Copy pre-built node_modules from release tarball if available
+  if [[ -d "${SCRIPT_DIR}/node_modules" ]]; then
+    log "Using bundled node_modules from release package..."
+    cp -r "${SCRIPT_DIR}/node_modules" "${APP_DIR}/"
+  fi
+
   # Create data directory
   mkdir -p "${APP_DIR}/data"
 
   # Set ownership
   chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 
-  # Install npm dependencies
-  log "Installing npm dependencies (this may take a minute)..."
+  # Install/verify npm dependencies
   cd "${APP_DIR}"
-  sudo -u "${APP_USER}" npm install --production --loglevel=warn 2>&1 | tail -3
+  if [[ -d "${APP_DIR}/node_modules/better-sqlite3" ]]; then
+    log "Dependencies already present — OK"
+  else
+    log "Installing npm dependencies (this may take a minute)..."
+    sudo -u "${APP_USER}" npm install --production --loglevel=warn 2>&1 | tail -3
+  fi
 
   log "Application installed"
 }
