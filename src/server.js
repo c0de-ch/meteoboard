@@ -1,4 +1,14 @@
 require('dotenv').config();
+
+// Refuse to run as root
+if (process.getuid && process.getuid() === 0) {
+  console.error('[MeteoBoard] ERROR: Do not run as root!');
+  console.error('[MeteoBoard] The service should run as the "meteoboard" user.');
+  console.error('[MeteoBoard] If using systemd, the unit file already sets User=meteoboard.');
+  console.error('[MeteoBoard] For manual start: sudo -u meteoboard node src/server.js');
+  process.exit(1);
+}
+
 const express = require('express');
 const http = require('http');
 const path = require('path');

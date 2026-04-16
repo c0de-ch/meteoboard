@@ -178,6 +178,18 @@ The API automatically serves raw data for short ranges (<=24h) and aggregated da
 
 Database location: `./data/meteoboard.db` (configurable via `DB_PATH`)
 
+## Security
+
+MeteoBoard is designed to **never run as root**:
+
+- The installer creates a dedicated `meteoboard` system user with no login shell (`/usr/sbin/nologin`)
+- The application **refuses to start** if executed as root
+- The systemd service runs as `User=meteoboard` with hardened security directives:
+  - `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`
+  - `CapabilityBoundingSet=` (no capabilities), `RestrictNamespaces`, `RestrictSUIDSGID`
+  - `ReadWritePaths` limited to the `data/` directory only
+- The `.env` file (may contain MQTT credentials) is `chmod 600`, owned by the app user
+
 ## Service Management
 
 ```bash

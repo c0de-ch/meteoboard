@@ -113,8 +113,8 @@ create_user() {
   if id "${APP_USER}" &>/dev/null; then
     log "User '${APP_USER}' already exists — OK"
   else
-    log "Creating system user '${APP_USER}'..."
-    useradd -r -m -s /bin/bash "${APP_USER}"
+    log "Creating system user '${APP_USER}' (no login shell)..."
+    useradd -r -d "${APP_DIR}" -s /usr/sbin/nologin "${APP_USER}"
     log "User created"
   fi
 }
@@ -138,6 +138,15 @@ install_app() {
   # Copy .env.example if no .env exists yet
   if [[ ! -f "${APP_DIR}/.env" ]]; then
     cp "${SCRIPT_DIR}/.env.example" "${APP_DIR}/.env.example"
+  fi
+
+  # Restrict .env permissions (may contain MQTT credentials)
+  if [[ -f "${APP_DIR}/.env" ]]; then
+    chmod 600 "${APP_DIR}/.env"
+    chown "${APP_USER}:${APP_USER}" "${APP_DIR}/.env"
+  fi
+  if [[ -f "${APP_DIR}/.env.example" ]]; then
+    chmod 640 "${APP_DIR}/.env.example"
   fi
 
   # Copy pre-built node_modules from release tarball if available
@@ -169,11 +178,14 @@ run_wizard() {
   echo ""
 
   cd "${APP_DIR}"
+  # Run wizard as the app user (sudo -u works even with nologin shell)
   sudo -u "${APP_USER}" node scripts/setup-wizard.js
 
-  # Copy generated .env if it was created in the script directory
   if [[ -f "${APP_DIR}/.env" ]]; then
-    log "Configuration saved"
+    # Lock down .env permissions — only readable by the app user
+    chmod 600 "${APP_DIR}/.env"
+    chown "${APP_USER}:${APP_USER}" "${APP_DIR}/.env"
+    log "Configuration saved (permissions: 600, owner: ${APP_USER})"
   else
     warn "No .env file created. You can run the wizard again later:"
     warn "  cd ${APP_DIR} && sudo -u ${APP_USER} npm run setup"
@@ -205,6 +217,14 @@ ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=${APP_DIR}/data
 PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=false
 
 [Install]
 WantedBy=multi-user.target
