@@ -45,11 +45,7 @@ router.get('/history/:sensor', (req, res) => {
     from = now - (RANGE_SECONDS[range] || 86400);
   }
 
-  const duration = to - from;
-  const readings = duration <= 86400
-    ? db.getReadings(sensor, from, to)
-    : db.getHourlyReadings(sensor, from, to);
-
+  const readings = db.getHistory(sensor, from, to);
   res.json({ sensor, from, to, count: readings.length, readings });
 });
 
@@ -60,13 +56,10 @@ router.get('/history', (req, res) => {
   const now = Math.floor(Date.now() / 1000);
   const to = now;
   const from = now - (RANGE_SECONDS[range] || 86400);
-  const duration = to - from;
 
   const data = {};
   for (const sensor of sensors) {
-    data[sensor] = duration <= 86400
-      ? db.getReadings(sensor, from, to)
-      : db.getHourlyReadings(sensor, from, to);
+    data[sensor] = db.getHistory(sensor, from, to);
   }
   res.json({ from, to, data });
 });
