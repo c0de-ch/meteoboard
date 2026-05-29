@@ -2,6 +2,16 @@ const mqtt = require('mqtt');
 const EventEmitter = require('events');
 const config = require('./config');
 
+// Accept a device-supplied timestamp only if it is finite and within a sane
+// window (last 7 days .. 1 day ahead). A bogus 0 / far-future value would
+// otherwise skew time-range queries, hourly aggregation, and retention.
+function sanitizeTimestamp(ts) {
+  const now = Math.floor(Date.now() / 1000);
+  const n = Math.floor(Number(ts));
+  if (Number.isFinite(n) && n > now - 7 * 86400 && n < now + 86400) return n;
+  return now;
+}
+
 class MqttClient extends EventEmitter {
   constructor() {
     super();
@@ -54,12 +64,17 @@ class MqttClient extends EventEmitter {
       const sensorName = config.reverseMap[componentId];
       if (!sensorName) return;
 
+      const value = typeof data.value === 'boolean'
+        ? (data.value ? 1 : 0)
+        : Number(data.value);
+      // Drop missing / non-numeric values rather than caching/inserting NaN
+      // (which binds as SQL NULL and violates the NOT NULL constraint).
+      if (!Number.isFinite(value)) return;
+
       const reading = {
         sensor: sensorName,
-        value: typeof data.value === 'boolean' ? (data.value ? 1 : 0) : Number(data.value),
-        timestamp: data.last_updated_ts
-          ? Math.floor(data.last_updated_ts)
-          : Math.floor(Date.now() / 1000),
+        value,
+        timestamp: sanitizeTimestamp(data.last_updated_ts),
       };
 
       this.lastValues[sensorName] = reading;
@@ -70,26 +85,24 @@ class MqttClient extends EventEmitter {
     // BTHomeDevice status (battery + RSSI)
     const deviceMatch = topic.match(/\/status\/bthomedevice:(\d+)$/);
     if (deviceMatch) {
-      const ts = data.last_updated_ts
-        ? Math.floor(data.last_updated_ts)
-        : Math.floor(Date.now() / 1000);
+      const ts = sanitizeTimestamp(data.last_updated_ts);
 
-      if (data.battery !== undefined) {
-        const batteryReading = {
-          sensor: 'battery',
-          value: data.battery,
-          timestamp: ts,
-        };
-        this.lastValues.battery = batteryReading;
-        this.emit('reading', batteryReading);
-      }
-
+      // Emit device-status first so a bad battery reading cannot suppress the
+      // RSSI/battery broadcast (listeners run synchronously; a throw in the
+      // 'reading' path would otherwise skip this).
       this.emit('device-status', {
         battery: data.battery,
         rssi: data.rssi,
         packetId: data.packet_id,
         timestamp: ts,
       });
+
+      const battery = Number(data.battery);
+      if (Number.isFinite(battery)) {
+        const batteryReading = { sensor: 'battery', value: battery, timestamp: ts };
+        this.lastValues.battery = batteryReading;
+        this.emit('reading', batteryReading);
+      }
     }
   }
 

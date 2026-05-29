@@ -38,9 +38,15 @@ wsBroadcaster.wss.on('connection', (ws) => {
   wsBroadcaster.sendInitialState(ws, mqttClient.getLastValues());
 });
 
-// Wire MQTT readings to DB + WS
+// Wire MQTT readings to DB + WS. The DB write is isolated so a storage error
+// is logged as such (not masqueraded as an MQTT parse error) and still allows
+// the live broadcast to reach connected clients.
 mqttClient.on('reading', (reading) => {
-  db.insert(reading.sensor, reading.value, reading.timestamp);
+  try {
+    db.insert(reading.sensor, reading.value, reading.timestamp);
+  } catch (err) {
+    console.error('[DB] Insert error:', err.message);
+  }
   wsBroadcaster.broadcast('reading', reading);
 });
 
@@ -53,7 +59,7 @@ mqttClient.connect();
 // --- Scheduled jobs ---
 
 // Hourly aggregation: run every 10 minutes, self-healing (aggregates any missing hours)
-setInterval(() => {
+const aggregationInterval = setInterval(() => {
   try {
     db.runAggregation();
   } catch (err) {
@@ -73,7 +79,7 @@ setTimeout(() => {
 
 // Daily retention cleanup
 db.runRetention();
-setInterval(() => {
+const retentionInterval = setInterval(() => {
   try {
     db.runRetention();
   } catch (err) {
@@ -89,14 +95,27 @@ server.listen(config.server.port, config.server.host, () => {
   console.log(`[MeteoBoard] Sensors mapped: ${Object.keys(config.sensorMap).join(', ') || 'none (run npm run setup)'}`);
 });
 
-// Graceful shutdown
+// Graceful shutdown: stop timers, close MQTT/WS, drain HTTP, then close the DB.
+let shuttingDown = false;
 function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log('\n[MeteoBoard] Shutting down...');
+
+  clearInterval(aggregationInterval);
+  clearInterval(retentionInterval);
   mqttClient.disconnect();
   wsBroadcaster.close();
-  server.close();
-  db.close();
-  process.exit(0);
+
+  const finish = () => {
+    try { db.close(); } catch { /* already closed */ }
+    process.exit(0);
+  };
+
+  // Exit once in-flight HTTP connections have drained...
+  server.close(finish);
+  // ...but don't hang forever if a client keeps the socket open.
+  setTimeout(finish, 5000).unref();
 }
 
 process.on('SIGTERM', shutdown);
