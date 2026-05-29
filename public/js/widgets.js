@@ -13,14 +13,23 @@ const WIDGET_ICONS = {
   rain_status:    '\u2614',
 };
 
+// Sensors that get a meaningful high/low (gauge-type). Counters (precipitation),
+// circular (wind_direction) and boolean (rain_status) are excluded.
+function showsStats(sensor, meta) {
+  return !meta.agg && sensor !== 'rain_status';
+}
+
 const Widgets = {
   meta: {},
   _elements: {},
+  _statElements: {},
 
   init(meta) {
     this.meta = meta;
+    this._elements = {};
+    this._statElements = {};
     const grid = document.getElementById('current-readings');
-    grid.innerHTML = '';
+    grid.textContent = '';
 
     // Sensors shown as cards (wind_direction uses compass instead)
     const widgetSensors = [
@@ -38,16 +47,51 @@ const Widgets = {
       card.dataset.sensor = sensor;
       card.id = `widget-${sensor}`;
 
-      const icon = WIDGET_ICONS[sensor] || '';
+      // Build with DOM nodes + textContent (no HTML interpolation of metadata).
+      const icon = document.createElement('div');
+      icon.className = 'icon';
+      icon.textContent = WIDGET_ICONS[sensor] || '';
 
-      card.innerHTML = `
-        <div class="icon">${icon}</div>
-        <div class="label">${m.label}</div>
-        <div class="value loading" id="value-${sensor}">--</div>
-        <div class="unit">${m.unit}</div>
-      `;
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = m.label;
+
+      const value = document.createElement('div');
+      value.className = 'value loading';
+      value.id = `value-${sensor}`;
+      value.textContent = '--';
+
+      const unit = document.createElement('div');
+      unit.className = 'unit';
+      unit.textContent = m.unit;
+
+      card.append(icon, label, value, unit);
+
+      if (showsStats(sensor, m)) {
+        const stats = document.createElement('div');
+        stats.className = 'stats';
+        stats.id = `stats-${sensor}`;
+        card.append(stats);
+        this._statElements[sensor] = stats;
+      }
+
       grid.appendChild(card);
-      this._elements[sensor] = document.getElementById(`value-${sensor}`);
+      this._elements[sensor] = value;
+    }
+  },
+
+  // statsBySensor: { sensor: { min, max, avg, ... } | null }
+  updateStats(statsBySensor) {
+    for (const [sensor, el] of Object.entries(this._statElements)) {
+      const m = this.meta[sensor];
+      const s = statsBySensor[sensor];
+      if (!m || !s || s.min == null || s.max == null) {
+        el.textContent = '';
+        continue;
+      }
+      const hi = Number(s.max).toFixed(m.precision);
+      const lo = Number(s.min).toFixed(m.precision);
+      el.textContent = `H ${hi} · L ${lo}`;
     }
   },
 

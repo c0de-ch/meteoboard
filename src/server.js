@@ -16,6 +16,7 @@ const config = require('./config');
 const db = require('./database');
 const MqttClient = require('./mqtt-client');
 const WsBroadcaster = require('./websocket');
+const AlertManager = require('./alerts');
 const apiRoutes = require('./routes/api');
 
 const app = express();
@@ -33,9 +34,13 @@ const wsBroadcaster = new WsBroadcaster(server);
 // MQTT
 const mqttClient = new MqttClient();
 
-// Send current state to newly connected WS clients
+// Threshold alerting
+const alertManager = new AlertManager(config.alerts);
+
+// Send current state + active alerts to newly connected WS clients
 wsBroadcaster.wss.on('connection', (ws) => {
   wsBroadcaster.sendInitialState(ws, mqttClient.getLastValues());
+  wsBroadcaster.sendTo(ws, 'alerts', alertManager.snapshot());
 });
 
 // Wire MQTT readings to DB + WS. The DB write is isolated so a storage error
@@ -48,6 +53,12 @@ mqttClient.on('reading', (reading) => {
     console.error('[DB] Insert error:', err.message);
   }
   wsBroadcaster.broadcast('reading', reading);
+
+  // Evaluate alert thresholds and broadcast any state changes (edges).
+  for (const change of alertManager.evaluate(reading.sensor, reading.value, reading.timestamp)) {
+    console.log(`[Alert] ${change.active ? 'ON ' : 'OFF'} ${change.key} (${change.sensor}=${change.value})`);
+    wsBroadcaster.broadcast('alert', change);
+  }
 });
 
 mqttClient.on('device-status', (status) => {

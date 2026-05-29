@@ -41,6 +41,15 @@ module.exports = {
     rawDays: parseInt(process.env.DATA_RETENTION_DAYS || '30', 10),
     aggregateDays: parseInt(process.env.AGGREGATE_RETENTION_DAYS || '365', 10),
   },
+  // Edge-triggered alert rules evaluated on each reading. op is one of
+  // lte/gte/lt/gt/eq; an alert fires when the condition becomes true and
+  // clears when it becomes false again.
+  alerts: [
+    { key: 'frost',       sensor: 'temperature', op: 'lte', value: 0.5, label: 'Frost risk',           severity: 'warning' },
+    { key: 'high_gust',   sensor: 'wind_gust',   op: 'gte', value: 15,  label: 'High wind gust',        severity: 'warning' },
+    { key: 'rain',        sensor: 'rain_status', op: 'eq',  value: 1,   label: 'Rain detected',         severity: 'info' },
+    { key: 'low_battery', sensor: 'battery',     op: 'lte', value: 20,  label: 'Low station battery',   severity: 'warning' },
+  ],
   // `agg` selects how the sensor is reduced into hourly aggregates:
   //   'gauge'    (default) \u2014 avg/min/max of the value
   //   'counter'  \u2014 monotonic counter; hourly value is the per-hour delta

@@ -24,6 +24,9 @@
   </header>
 
   <main>
+    <!-- Threshold alerts -->
+    <div id="alert-banner" class="alert-banner" hidden></div>
+
     <!-- Current readings -->
     <section id="current-readings" class="widget-grid"></section>
 
@@ -81,12 +84,15 @@
 
     <!-- Historical charts -->
     <section id="charts-section">
-      <div class="time-range-selector">
-        <button data-range="1h">1H</button>
-        <button data-range="6h">6H</button>
-        <button data-range="24h" class="active">24H</button>
-        <button data-range="7d">7D</button>
-        <button data-range="30d">30D</button>
+      <div class="charts-toolbar">
+        <div class="time-range-selector">
+          <button data-range="1h">1H</button>
+          <button data-range="6h">6H</button>
+          <button data-range="24h" class="active">24H</button>
+          <button data-range="7d">7D</button>
+          <button data-range="30d">30D</button>
+        </div>
+        <button id="export-btn" class="export-btn" title="Download the selected range as CSV">&#x2913; Export</button>
       </div>
 
       <div class="charts-grid">
