@@ -41,6 +41,10 @@ module.exports = {
     rawDays: parseInt(process.env.DATA_RETENTION_DAYS || '30', 10),
     aggregateDays: parseInt(process.env.AGGREGATE_RETENTION_DAYS || '365', 10),
   },
+  // `agg` selects how the sensor is reduced into hourly aggregates:
+  //   'gauge'    (default) \u2014 avg/min/max of the value
+  //   'counter'  \u2014 monotonic counter; hourly value is the per-hour delta
+  //   'circular' \u2014 compass bearing; hourly value is the (vector) circular mean
   sensorMeta: {
     temperature:    { label: 'Temperature',   unit: '\u00b0C',  precision: 1, icon: 'thermometer' },
     humidity:       { label: 'Humidity',       unit: '%',   precision: 0, icon: 'droplet' },
@@ -50,8 +54,8 @@ module.exports = {
     wind_speed:     { label: 'Wind Speed',     unit: 'm/s', precision: 1, icon: 'wind' },
     wind_gust:      { label: 'Wind Gust',      unit: 'm/s', precision: 1, icon: 'wind' },
     uv_index:       { label: 'UV Index',       unit: '',    precision: 1, icon: 'sun-dim' },
-    wind_direction: { label: 'Wind Dir.',      unit: '\u00b0',   precision: 0, icon: 'compass' },
-    precipitation:  { label: 'Rain',           unit: 'mm',  precision: 1, icon: 'cloud-rain' },
+    wind_direction: { label: 'Wind Dir.',      unit: '\u00b0',   precision: 0, icon: 'compass', agg: 'circular' },
+    precipitation:  { label: 'Rain',           unit: 'mm',  precision: 1, icon: 'cloud-rain', agg: 'counter' },
     rain_status:    { label: 'Rain Status',    unit: '',    precision: 0, icon: 'cloud-drizzle' },
     battery:        { label: 'Battery',        unit: '%',   precision: 0, icon: 'battery' },
   },
