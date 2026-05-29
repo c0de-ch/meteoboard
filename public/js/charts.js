@@ -1,8 +1,19 @@
 /* Charts — Chart.js time-series configuration and management */
 
+const CHART_RANGE_SECONDS = {
+  '1h': 3600,
+  '6h': 21600,
+  '24h': 86400,
+  '7d': 604800,
+  '30d': 2592000,
+};
+
 const Charts = {
   instances: {},
   meta: {},
+  range: '24h',
+  rangeSeconds: 86400,
+  usesHourly: false, // ranges > 24h are served as hourly aggregates
 
   init(meta) {
     this.meta = meta;
@@ -138,6 +149,11 @@ const Charts = {
   },
 
   async loadAll(range) {
+    this.range = range;
+    this.rangeSeconds = CHART_RANGE_SECONDS[range] || 86400;
+    // The server serves hourly aggregates for ranges longer than 24h.
+    this.usesHourly = this.rangeSeconds > 86400;
+
     const allKeys = new Set();
     for (const chart of Object.values(this.instances)) {
       if (!chart) continue;
@@ -150,12 +166,17 @@ const Charts = {
       const res = await fetch(`/api/history?sensors=${[...allKeys].join(',')}&range=${range}`);
       const json = await res.json();
 
+      const now = Date.now();
+      const min = now - this.rangeSeconds * 1000;
       for (const chart of Object.values(this.instances)) {
         if (!chart) continue;
         for (const ds of chart.data.datasets) {
           const readings = json.data[ds._sensorKey] || [];
           ds.data = readings.map(r => ({ x: r.timestamp * 1000, y: r.value }));
         }
+        // Pin the visible window to the selected range so it doesn't drift.
+        chart.options.scales.x.min = min;
+        chart.options.scales.x.max = now;
         chart.update('none');
       }
     } catch (err) {
@@ -164,18 +185,34 @@ const Charts = {
   },
 
   appendPoint(sensor, reading) {
+    // On aggregate (>24h) views the series is hourly averages; appending raw
+    // sub-hour points would clash with the smoothed line, so skip them.
+    if (this.usesHourly) return;
+
+    const x = reading.timestamp * 1000;
+    const cutoff = x - this.rangeSeconds * 1000;
+
     for (const chart of Object.values(this.instances)) {
       if (!chart) continue;
+      let modified = false;
       for (const ds of chart.data.datasets) {
         if (ds._sensorKey === sensor) {
-          ds.data.push({ x: reading.timestamp * 1000, y: reading.value });
-          // Limit points to prevent memory growth (keep last 5000)
-          if (ds.data.length > 5000) {
-            ds.data = ds.data.slice(-4000);
-          }
-          chart.update('none');
+          ds.data.push({ x, y: reading.value });
+          modified = true;
         }
       }
+      if (!modified) continue;
+
+      // Slide the window: drop points older than the selected range and pin
+      // the axis to [cutoff, x] so the view shows exactly the chosen span.
+      for (const ds of chart.data.datasets) {
+        if (ds.data.length && ds.data[0].x < cutoff) {
+          ds.data = ds.data.filter(p => p.x >= cutoff);
+        }
+      }
+      chart.options.scales.x.min = cutoff;
+      chart.options.scales.x.max = x;
+      chart.update('none'); // once per chart, after all its datasets are updated
     }
   },
 };

@@ -11,6 +11,10 @@ const RANGE_SECONDS = {
   '30d': 2592000,
 };
 
+// Guardrails for explicit from/to queries on a trusted-but-shared LAN.
+const MAX_SPAN_SECONDS = 366 * 86400; // never query more than ~1 year at once
+const MAX_SENSORS_PER_REQUEST = 20;
+
 // GET /api/current — latest value per sensor
 router.get('/current', (_req, res) => {
   const rows = db.getAllLatest();
@@ -28,9 +32,14 @@ router.get('/history/:sensor', (req, res) => {
   const now = Math.floor(Date.now() / 1000);
 
   let from, to;
-  if (req.query.from && req.query.to) {
+  if (req.query.from !== undefined && req.query.to !== undefined) {
     from = parseInt(req.query.from, 10);
     to = parseInt(req.query.to, 10);
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from >= to) {
+      return res.status(400).json({ error: 'Invalid from/to: must be integers with from < to' });
+    }
+    // Clamp absurd spans so a single request can't materialize the whole table.
+    if (to - from > MAX_SPAN_SECONDS) from = to - MAX_SPAN_SECONDS;
   } else {
     to = now;
     from = now - (RANGE_SECONDS[range] || 86400);
@@ -46,7 +55,7 @@ router.get('/history/:sensor', (req, res) => {
 
 // GET /api/history?sensors=temperature,humidity&range=24h
 router.get('/history', (req, res) => {
-  const sensors = (req.query.sensors || '').split(',').filter(Boolean);
+  const sensors = (req.query.sensors || '').split(',').filter(Boolean).slice(0, MAX_SENSORS_PER_REQUEST);
   const range = req.query.range || '24h';
   const now = Math.floor(Date.now() / 1000);
   const to = now;

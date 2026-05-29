@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Weather dashboard for Shelly WS90 (SBWS-90CM) via BLU Gateway Gen3",
   "main": "src/server.js",
+  "license": "MIT",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
