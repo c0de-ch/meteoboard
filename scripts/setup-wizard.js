@@ -17,6 +17,7 @@ const mqtt = require('mqtt');
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
+const { buildSensorMap } = require('./lib/classify');
 
 const ENV_PATH = path.join(__dirname, '..', '.env');
 
@@ -140,7 +141,7 @@ function discoverSensors(brokerUrl, topicPrefix) {
         if (deviceMatch) {
           deviceInfo = { id: parseInt(deviceMatch[1], 10), battery: data.battery, rssi: data.rssi };
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     });
 
     let elapsed = 0;
@@ -160,69 +161,10 @@ function discoverSensors(brokerUrl, topicPrefix) {
 }
 
 function classifyAndMap(sensors) {
-  const map = {};
-  const classified = {};
-
-  for (const [id, info] of Object.entries(sensors)) {
-    const vals = info.values;
-    if (vals.length === 0) continue;
-    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-
-    let type = 'unknown';
-    if (vals.every(v => v === 0 || v === 1)) type = 'rain_status';
-    else if (avg > 300 && avg < 1200 && min > 250) type = 'pressure';
-    else if (max > 1000 && min >= 0) type = 'illuminance';
-    else if (avg > -45 && avg < 65 && max < 70 && min < 65) type = 'temperature_like';
-    else if (avg >= 0 && avg <= 100 && max <= 100 && max > 15) type = 'humidity_like';
-    else if (max <= 15 && min >= 0) type = 'uv_index';
-    else if (min >= 0 && max <= 360) type = 'wind_direction';
-    else if (min >= 0 && max < 100) type = 'wind_like';
-    else if (min >= 0) type = 'precipitation';
-
-    classified[id] = { type, avg, min, max, samples: vals.length };
-  }
-
-  // Assign specific sensors
-  for (const [id, info] of Object.entries(classified)) {
-    if (info.type === 'rain_status') map.rain_status = id;
-    if (info.type === 'pressure') map.pressure = id;
-    if (info.type === 'illuminance') map.illuminance = id;
-    if (info.type === 'uv_index') map.uv_index = id;
-    if (info.type === 'wind_direction') map.wind_direction = id;
-    if (info.type === 'precipitation') map.precipitation = id;
-  }
-
-  // Temperature vs dew point
-  const tempLike = Object.entries(classified)
-    .filter(([, i]) => i.type === 'temperature_like')
-    .sort((a, b) => b[1].avg - a[1].avg);
-  if (tempLike.length >= 2) {
-    map.temperature = tempLike[0][0];
-    map.dew_point = tempLike[1][0];
-  } else if (tempLike.length === 1) {
-    map.temperature = tempLike[0][0];
-  }
-
-  // Humidity
-  const humLike = Object.entries(classified)
-    .filter(([, i]) => i.type === 'humidity_like')
-    .sort((a, b) => b[1].avg - a[1].avg);
-  if (humLike.length >= 1) map.humidity = humLike[0][0];
-
-  // Wind speed vs gust
-  const windLike = Object.entries(classified)
-    .filter(([, i]) => i.type === 'wind_like')
-    .sort((a, b) => Math.max(...sensors[a[0]].values) - Math.max(...sensors[b[0]].values));
-  if (windLike.length >= 2) {
-    map.wind_speed = windLike[0][0];
-    map.wind_gust = windLike[1][0];
-  } else if (windLike.length === 1) {
-    map.wind_speed = windLike[0][0];
-  }
-
-  return { map, classified };
+  // Adapt { id: { values: [] } } -> { id: values[] } for the shared classifier.
+  const byId = {};
+  for (const [id, info] of Object.entries(sensors)) byId[id] = info.values;
+  return buildSensorMap(byId);
 }
 
 function writeEnvFile(config) {

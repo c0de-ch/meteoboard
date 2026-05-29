@@ -230,14 +230,26 @@ systemctl stop meteoboard
 
 ## Updating
 
+If you installed from a release tarball (the recommended path), download the
+new release and re-run the installer. It updates the code in place, rebuilds
+native modules if needed, and preserves your existing `.env` and `data/`
+(the setup wizard detects the existing `.env` and asks before overwriting —
+answer **N** to keep your config):
+
+```bash
+wget https://github.com/c0de-ch/meteoboard/releases/latest/download/meteoboard-<version>.tar.gz
+tar -xzf meteoboard-<version>.tar.gz
+cd meteoboard-<version>
+sudo bash install.sh
+```
+
+For a **git-based development checkout** (where `/opt/meteoboard` is a git repo):
+
 ```bash
 cd /opt/meteoboard
 sudo systemctl stop meteoboard
-
-# Pull latest code (or copy new files)
 sudo -u meteoboard git pull
 sudo -u meteoboard npm install --production
-
 sudo systemctl start meteoboard
 ```
 

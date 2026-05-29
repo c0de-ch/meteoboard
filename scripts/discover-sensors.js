@@ -13,6 +13,7 @@
 
 const mqtt = require('mqtt');
 const readline = require('readline');
+const { classifySensor, buildSensorMap } = require('./lib/classify');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -26,41 +27,6 @@ function ask(question, defaultVal) {
       resolve(answer.trim() || defaultVal || '');
     });
   });
-}
-
-// Heuristic sensor classification based on observed values
-function classifySensor(values) {
-  if (values.length === 0) return 'unknown';
-  const avg = values.reduce((a, b) => a + b, 0) / values.length;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-
-  // Boolean (0 or 1)
-  if (values.every(v => v === 0 || v === 1 || v === true || v === false)) return 'rain_status';
-  // Pressure (300-1100 hPa)
-  if (avg > 300 && avg < 1200 && min > 250) return 'pressure';
-  // Illuminance (can be 0 to 200000+)
-  if (max > 1000 && min >= 0) return 'illuminance';
-  // Temperature-range (-40 to 60)
-  if (avg > -45 && avg < 65 && max < 70) {
-    // Dew point is typically lower than temperature
-    // We'll need to compare pairs later, for now mark as temperature-like
-    return 'temperature_or_dewpoint';
-  }
-  // Humidity (0-100, typically 20-100)
-  if (avg >= 0 && avg <= 100 && min >= 0 && max <= 100) {
-    // Could also be battery or UV index
-    if (max <= 15) return 'uv_index';
-    return 'humidity_or_battery';
-  }
-  // Wind direction (0-360)
-  if (min >= 0 && max <= 360 && avg > 0) return 'wind_direction';
-  // Wind speed / gust (0-50+ m/s typically)
-  if (min >= 0 && max < 100 && avg < 40) return 'wind_speed_or_gust';
-  // Precipitation (cumulative, can be any positive number)
-  if (min >= 0) return 'precipitation';
-
-  return 'unknown';
 }
 
 async function main() {
@@ -145,7 +111,7 @@ async function main() {
           rssi: data.rssi,
         };
       }
-    } catch (e) { /* ignore parse errors */ }
+    } catch { /* ignore parse errors */ }
   });
 
   client.on('error', (err) => {
@@ -198,7 +164,9 @@ async function main() {
     console.log('\n--- Suggested SENSOR_MAP ---');
     console.log('Review the mapping above and adjust if needed.\n');
 
-    const sensorMap = buildSensorMap(classified);
+    const byId = {};
+    for (const [id, info] of Object.entries(discovered)) byId[id] = info.values;
+    const { map: sensorMap } = buildSensorMap(byId);
     const mapStr = Object.entries(sensorMap)
       .map(([name, id]) => `${name}=${id}`)
       .join(',');
@@ -211,53 +179,6 @@ async function main() {
 
     rl.close();
   }
-}
-
-function buildSensorMap(classified) {
-  const map = {};
-  const entries = Object.entries(classified);
-
-  // Simple assignment based on classification
-  for (const [id, info] of entries) {
-    switch (info.classification) {
-      case 'pressure': map.pressure = id; break;
-      case 'illuminance': map.illuminance = id; break;
-      case 'rain_status': map.rain_status = id; break;
-      case 'wind_direction': map.wind_direction = id; break;
-      case 'uv_index': map.uv_index = id; break;
-      case 'precipitation': map.precipitation = id; break;
-    }
-  }
-
-  // Temperature vs dew_point: higher average is likely temperature
-  const tempLike = entries
-    .filter(([, info]) => info.classification === 'temperature_or_dewpoint')
-    .sort((a, b) => b[1].avgValue - a[1].avgValue);
-  if (tempLike.length >= 2) {
-    map.temperature = tempLike[0][0];
-    map.dew_point = tempLike[1][0];
-  } else if (tempLike.length === 1) {
-    map.temperature = tempLike[0][0];
-  }
-
-  // Humidity vs battery: higher avg and more variable is likely humidity
-  const humLike = entries
-    .filter(([, info]) => info.classification === 'humidity_or_battery')
-    .sort((a, b) => b[1].avgValue - a[1].avgValue);
-  if (humLike.length >= 1) map.humidity = humLike[0][0];
-
-  // Wind speed vs gust: gust has higher peaks
-  const windLike = entries
-    .filter(([, info]) => info.classification === 'wind_speed_or_gust')
-    .sort((a, b) => Math.max(...a[1].values) - Math.max(...b[1].values));
-  if (windLike.length >= 2) {
-    map.wind_speed = windLike[0][0];
-    map.wind_gust = windLike[1][0];
-  } else if (windLike.length === 1) {
-    map.wind_speed = windLike[0][0];
-  }
-
-  return map;
 }
 
 main().catch(err => {

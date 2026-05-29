@@ -110,6 +110,10 @@ class MqttClient extends EventEmitter {
     return { ...this.lastValues };
   }
 
+  isConnected() {
+    return !!(this.client && this.client.connected);
+  }
+
   disconnect() {
     if (this.client) this.client.end();
   }

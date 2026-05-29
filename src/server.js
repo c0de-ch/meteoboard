@@ -37,6 +37,22 @@ const mqttClient = new MqttClient();
 // Threshold alerting
 const alertManager = new AlertManager(config.alerts);
 
+// Liveness/readiness endpoint for monitors and systemd watchdogs. Always 200
+// (the process is serving); `healthy` reflects MQTT link + data freshness.
+app.get('/health', (_req, res) => {
+  const now = Math.floor(Date.now() / 1000);
+  let newest = 0;
+  for (const r of db.getAllLatest()) newest = Math.max(newest, r.timestamp);
+  const lastReadingAge = newest ? now - newest : null;
+  const mqttConnected = mqttClient.isConnected();
+  res.json({
+    healthy: mqttConnected && lastReadingAge != null && lastReadingAge < 600,
+    uptime_s: Math.floor(process.uptime()),
+    mqtt_connected: mqttConnected,
+    last_reading_age_s: lastReadingAge,
+  });
+});
+
 // Send current state + active alerts to newly connected WS clients
 wsBroadcaster.wss.on('connection', (ws) => {
   wsBroadcaster.sendInitialState(ws, mqttClient.getLastValues());

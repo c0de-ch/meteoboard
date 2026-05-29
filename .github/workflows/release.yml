@@ -40,6 +40,7 @@ jobs:
           cp .env.example "${RELEASE_DIR}/"
           cp .gitignore "${RELEASE_DIR}/"
           cp README.md "${RELEASE_DIR}/"
+          cp LICENSE "${RELEASE_DIR}/"
           cp install.sh "${RELEASE_DIR}/"
           chmod +x "${RELEASE_DIR}/install.sh"
           chmod +x "${RELEASE_DIR}/scripts/"*.js
