@@ -8,6 +8,10 @@ Displays real-time and historical data from all 7 sensors: temperature, humidity
 
 - **Live dashboard** — real-time sensor updates via WebSocket (~9s refresh)
 - **Historical charts** — temperature, humidity, pressure, wind, rain, light/UV with selectable time ranges (1h, 6h, 24h, 7d, 30d)
+- **High / low records** — per-range min and max shown on each sensor card
+- **Threshold alerts** — in-dashboard banners for frost, high wind gust, rain, and low station battery
+- **Stale-data detection** — dims the dashboard and shows "no data for Xm" if the station stops reporting
+- **Data export** — download any range as CSV or JSON
 - **Responsive design** — works on desktop, tablet, and mobile
 - **Wind compass** — SVG wind direction indicator with cardinal labels
 - **Auto-discovery** — setup wizard finds your sensors automatically
@@ -134,6 +138,10 @@ SENSOR_MAP=temperature=213,humidity=214,pressure=216,illuminance=207,dew_point=2
 
 Each entry is `sensor_name=component_id`. The component IDs come from your gateway's BTHomeSensor configuration.
 
+### Alert Thresholds
+
+Threshold alerts (frost, high wind gust, rain, low battery) are defined in the `alerts` array in `src/config.js`. Each rule is `{ key, sensor, op, value, label, severity }` where `op` is one of `lte`/`gte`/`lt`/`gt`/`eq`. Edit the array to add, remove, or retune alerts; restart the service to apply.
+
 ## API Reference
 
 ### Current readings
@@ -159,6 +167,20 @@ GET /api/history?sensors=temperature,humidity&range=24h
 ```bash
 GET /api/rain/accumulation?range=24h
 # Returns: { "accumulation_mm": 2.4 }
+```
+
+### Statistics (min / avg / max + time of extremes)
+```bash
+GET /api/stats?sensors=temperature,humidity&range=24h
+# range: 1h, 6h, 24h, 7d, 30d, today, alltime
+# Returns: { "stats": { "temperature": { "min": 9.3, "min_ts": ..., "max": 24.1, "max_ts": ..., "avg": 16.8 }, ... } }
+```
+
+### Data export (CSV / JSON)
+```bash
+GET /api/export?sensors=temperature,humidity&range=7d&format=csv
+# format: csv (default) or json; omit sensors to export all
+# Streams a file download (timestamp,datetime,sensor,value)
 ```
 
 ### Sensor metadata

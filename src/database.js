@@ -127,6 +127,33 @@ const stmtUpsertHourly = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?)
 `);
 
+const stmtRawStats = db.prepare(`
+  SELECT MIN(value) AS min, MAX(value) AS max, AVG(value) AS avg, COUNT(*) AS cnt
+  FROM readings WHERE sensor = ? AND timestamp >= ? AND timestamp <= ?
+`);
+const stmtRawArgMin = db.prepare(`
+  SELECT timestamp FROM readings WHERE sensor = ? AND timestamp >= ? AND timestamp <= ?
+  ORDER BY value ASC, timestamp ASC LIMIT 1
+`);
+const stmtRawArgMax = db.prepare(`
+  SELECT timestamp FROM readings WHERE sensor = ? AND timestamp >= ? AND timestamp <= ?
+  ORDER BY value DESC, timestamp ASC LIMIT 1
+`);
+const stmtHourlyStats = db.prepare(`
+  SELECT MIN(min_value) AS min, MAX(max_value) AS max,
+         SUM(avg_value * sample_count) / NULLIF(SUM(sample_count), 0) AS avg,
+         SUM(sample_count) AS cnt
+  FROM readings_hourly WHERE sensor = ? AND hour >= ? AND hour <= ?
+`);
+const stmtHourlyArgMin = db.prepare(`
+  SELECT hour FROM readings_hourly WHERE sensor = ? AND hour >= ? AND hour <= ?
+  ORDER BY min_value ASC LIMIT 1
+`);
+const stmtHourlyArgMax = db.prepare(`
+  SELECT hour FROM readings_hourly WHERE sensor = ? AND hour >= ? AND hour <= ?
+  ORDER BY max_value DESC LIMIT 1
+`);
+
 const stmtPurgeRaw = db.prepare('DELETE FROM readings WHERE timestamp < ?');
 const stmtPurgeAggregates = db.prepare('DELETE FROM readings_hourly WHERE hour < ?');
 const stmtMinTs = db.prepare('SELECT MIN(timestamp) AS min_ts FROM readings');
@@ -215,6 +242,32 @@ module.exports = {
       }
     }
     return tail.length ? hourly.concat(tail) : hourly;
+  },
+
+  // Min/avg/max (with the time of the extremes) over a window. Uses exact raw
+  // data when the window is within raw retention, else hourly aggregates.
+  getStats(sensor, from, to) {
+    const useRaw = (to - from) <= config.retention.rawDays * 86400;
+    if (useRaw) {
+      const s = stmtRawStats.get(sensor, from, to);
+      if (!s || !s.cnt) return null;
+      const minRow = stmtRawArgMin.get(sensor, from, to);
+      const maxRow = stmtRawArgMax.get(sensor, from, to);
+      return {
+        min: s.min, max: s.max, avg: s.avg, count: s.cnt,
+        min_ts: minRow && minRow.timestamp, max_ts: maxRow && maxRow.timestamp,
+        resolution: 'raw',
+      };
+    }
+    const s = stmtHourlyStats.get(sensor, from, to);
+    if (!s || !s.cnt) return null;
+    const minRow = stmtHourlyArgMin.get(sensor, from, to);
+    const maxRow = stmtHourlyArgMax.get(sensor, from, to);
+    return {
+      min: s.min, max: s.max, avg: s.avg, count: s.cnt,
+      min_ts: minRow && minRow.hour, max_ts: maxRow && maxRow.hour,
+      resolution: 'hourly',
+    };
   },
 
   getLatest(sensor) {

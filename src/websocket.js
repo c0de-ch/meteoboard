@@ -31,8 +31,12 @@ class WsBroadcaster {
   }
 
   sendInitialState(ws, currentValues) {
+    this.sendTo(ws, 'init', currentValues);
+  }
+
+  sendTo(ws, type, data) {
     if (ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: 'init', data: currentValues }));
+      ws.send(JSON.stringify({ type, data }));
     }
   }
 
