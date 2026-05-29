@@ -161,10 +161,23 @@ install_app() {
   # Set ownership
   chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 
-  # Install/verify npm dependencies
+  # Install/verify npm dependencies. Bundled node_modules contain a native
+  # better-sqlite3 binary built for the release host; verify it actually loads
+  # on THIS system (CPU arch / Node ABI may differ) and rebuild if not.
   cd "${APP_DIR}"
   if [[ -d "${APP_DIR}/node_modules/better-sqlite3" ]]; then
-    log "Dependencies already present — OK"
+    log "Bundled dependencies present — verifying native modules for this system..."
+    if sudo -u "${APP_USER}" node -e "require('better-sqlite3')" >/dev/null 2>&1; then
+      log "Native modules OK"
+    else
+      warn "Bundled better-sqlite3 is incompatible with this system — rebuilding..."
+      if ! sudo -u "${APP_USER}" npm rebuild better-sqlite3 --loglevel=warn 2>&1 | tail -3; then
+        warn "Rebuild failed — reinstalling production dependencies..."
+        sudo -u "${APP_USER}" npm install --production --loglevel=warn 2>&1 | tail -3
+      fi
+      sudo -u "${APP_USER}" node -e "require('better-sqlite3')" >/dev/null 2>&1 \
+        || error "better-sqlite3 still fails to load. Check build tools and Node version."
+    fi
   else
     log "Installing npm dependencies (this may take a minute)..."
     sudo -u "${APP_USER}" npm install --production --loglevel=warn 2>&1 | tail -3
